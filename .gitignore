@@ -1,0 +1,9 @@
+.vscode/
+old/
+provegpd/
+provevarie/
+*_out/
+*.out
+*.dat
+*.pdf
+
