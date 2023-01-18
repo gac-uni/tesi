@@ -5,7 +5,15 @@
 #include "gpd.h"
 
 class Walker{
-    public:
+    public:      
+        double * ppvx;
+        double * ppvy;
+        double * ppvz;
+        int nparticelle;
+        double lscatola;
+        double * parametripot;
+        double * parametrilogprob;
+        double hqsdm = 0.09076;
         double dzeroU(double r, double * parametri){
             /*
             parametri: 
@@ -112,32 +120,8 @@ class Walker{
             double pot=4.*parametripot[0]*(pot1-nparticelle*(nparticelle-1)/2.*(taglio12-taglio6));
             return pot;
         }
-        double logprob(int primomod, int ultimomod){
+        double logprob(){
             double psi1=0;
-            // for(int i=primomod;i<ultimomod;i++){
-            //     for(int j=i+1;j<ultimomod;j++){
-            //         double distanza=sqrt((ppvx[nparticelle*i+j]*ppvx[nparticelle*i+j])+(ppvy[nparticelle*i+j]*ppvy[nparticelle*i+j])+(ppvz[nparticelle*i+j]*ppvz[nparticelle*i+j]));
-            //         if(distanza<=lscatola/2.){
-            //             psi1+=UT(distanza, parametrilogprob);
-            //         }
-            //     }
-            // }
-            // for(int i=0;i<primomod;i++){
-            //     for(int j=primomod;j<ultimomod;j++){
-            //         double distanza=sqrt((ppvx[nparticelle*i+j]*ppvx[nparticelle*i+j])+(ppvy[nparticelle*i+j]*ppvy[nparticelle*i+j])+(ppvz[nparticelle*i+j]*ppvz[nparticelle*i+j]));
-            //         if(distanza<=lscatola/2.){
-            //             psi1+=UT(distanza, parametrilogprob);
-            //         }
-            //     }
-            // }
-            // for(int i=ultimomod+1;i<nparticelle;i++){
-            //     for(int j=primomod;j<ultimomod;j++){
-            //         double distanza=sqrt((ppvx[nparticelle*i+j]*ppvx[nparticelle*i+j])+(ppvy[nparticelle*i+j]*ppvy[nparticelle*i+j])+(ppvz[nparticelle*i+j]*ppvz[nparticelle*i+j]));
-            //         if(distanza<=lscatola/2.){
-            //             psi1+=UT(distanza, parametrilogprob);
-            //         }
-            //     }
-            // }
             for(int i=0;i<nparticelle;i++){
                 for(int j=i+1;j<nparticelle;j++){
                     double distanza=sqrt((ppvx[nparticelle*i+j]*ppvx[nparticelle*i+j])+(ppvy[nparticelle*i+j]*ppvy[nparticelle*i+j])+(ppvz[nparticelle*i+j]*ppvz[nparticelle*i+j]));
@@ -187,23 +171,22 @@ class Walker{
             delete [] ppvz;
             delete [] parametrilogprob;
             delete [] parametripot;
-        }        
-        double * ppvx;
-        double * ppvy;
-        double * ppvz;
-    private:     
-        int nparticelle;
-        double lscatola;
-        double * parametripot;
-        double * parametrilogprob;
-        double hqsdm = 0.09076;
+        }  
 };
 
-int mrt(Walker * walker, double tau, int primomod, int ultimomod, double * (* boxmuller)(double, double, double)){
-    int ndamod=ultimomod-primomod+1;
-    double variazioni[ndamod][3];
-    double probprec=(*walker).logprob(primomod, ultimomod);
-    for(int i=0;i<ndamod;i++){
+double * boxmuller(double x, double y, double sigma){
+    double * out;
+    out = new double[2];
+    out[0]=sigma*sqrt(-2*log(1-y))*cos(2*M_PI*x);
+    out[1]=sigma*sqrt(-2*log(1-y))*sin(2*M_PI*x);
+    return out;
+}
+
+int mrt(Walker * walker, double tau){
+    int nparticelle = walker->nparticelle;
+    double variazioni[nparticelle][3];
+    double probprec=(*walker).logprob();
+    for(int i=0;i<nparticelle;i++){
         double tempA=(double)rand()/(double)RAND_MAX;
         double tempB=(double)rand()/(double)RAND_MAX;
         double tempC=(double)rand()/(double)RAND_MAX;
@@ -216,10 +199,10 @@ int mrt(Walker * walker, double tau, int primomod, int ultimomod, double * (* bo
         delete [] tempgaussA;
         delete [] tempgaussB;
     }
-    for(int i=0;i<ndamod;i++){
+    for(int i=0;i<nparticelle;i++){
         (*walker).varpv(&variazioni[i][0], i);
     }
-    double probsucc=(*walker).logprob(primomod, ultimomod);
+    double probsucc=(*walker).logprob();
     double q=exp(-probprec+probsucc); 
     if(q>1){
         return 1;
@@ -227,7 +210,7 @@ int mrt(Walker * walker, double tau, int primomod, int ultimomod, double * (* bo
     if((double)rand()/(double)RAND_MAX<q){
         return 1;
     }
-    for(int i=0;i<ndamod;i++){
+    for(int i=0;i<nparticelle;i++){
         double menovar[3]={-variazioni[i][0], -variazioni[i][1], -variazioni[i][2]};
         (*walker).varpv(menovar, i);
     }
@@ -244,14 +227,6 @@ double * mediacumulata(double * vettore, int nelementi, int elementoiniziale){
     }
     cumulata[nelementi-elementoiniziale-1]/=nelementi-elementoiniziale;
     return cumulata;
-}
-
-double * boxmuller(double x, double y, double sigma){
-    double * out;
-    out = new double[2];
-    out[0]=sigma*sqrt(-2*log(1-y))*cos(2*M_PI*x);
-    out[1]=sigma*sqrt(-2*log(1-y))*sin(2*M_PI*x);
-    return out;
 }
 
 FILE * valori;
@@ -274,8 +249,8 @@ int main(){
     double volce=(double)nparticelle/(densita*(double)nce);
     double latoce=pow(volce, 1./3.);
     double latoscatola=latoce*pow(nce, 1./3.);
-    int npassi=100000;
-    int freqcampionamento=100;
+    int npassi=10000000;
+    int freqcampionamento=1000;
     int npassiplot = npassi/freqcampionamento+0.5; 
     double tau=0.00002;
     double naccettati=0;
@@ -304,7 +279,7 @@ int main(){
     GnuplotDriver controllogp;
     GnuplotDriver energiagp;
     GnuplotDriver energiaditgp;
-    valori=fopen("varmcbello/valori.dat", "w");
+    valori=fopen("varmcbello_out/valori.dat", "w");
 
     // inizializzo le posizioni
     double posx[nparticelle]={0};
@@ -325,7 +300,7 @@ int main(){
     }
 
     // plot delle posizioni iniziali
-    controllogp.conf("fPath", "varmcbello/posiniziale");
+    controllogp.conf("fPath", "varmcbello_out/posiniziale");
     controllogp.conf("ls", "points");
     controllogp.plot(posx, posy, posz, nparticelle);
 
@@ -358,7 +333,7 @@ int main(){
     for(int i=0; i<npassi; i++){
         int primomod=floor((double)(rand()-1)/(double)RAND_MAX*(nparticelle-nmod));
         int ultimomod=primomod+nmod-1;
-        naccettati+=mrt(&walker, tau, primomod, ultimomod, boxmuller);
+        naccettati+=mrt(&walker, tau);
         if(i%freqcampionamento==0){
             potdit[contatoreplot]=walker.pot();
             double * tempken=walker.ken();
@@ -386,41 +361,41 @@ int main(){
     }
 
     // grafici
-    // kengp.conf("fPath", "varmcbello/ken");
+    // kengp.conf("fPath", "varmcbello_out/ken");
     // kengp.conf("ls", "line");
     // kengp.plot(kencum, npassiplot, 1);
 
-    // potgp.conf("fPath", "varmcbello/pot");
+    // potgp.conf("fPath", "varmcbello_out/pot");
     // potgp.conf("ls", "line");
     // potgp.plot(potcum, npassiplot, 1);
 
-    kenditgp.conf("fPath", "varmcbello/kendit");
+    kenditgp.conf("fPath", "varmcbello_out/kendit");
     kenditgp.conf("ls", "line");
     kenditgp.conf("t", "energia cinetica");
     kenditgp.conf("x", "passi");
     kenditgp.conf("y", "energia cinetica");
     kenditgp.plot(kendit, npassiplot, 1);
 
-    potditgp.conf("fPath", "varmcbello/potdit");
+    potditgp.conf("fPath", "varmcbello_out/potdit");
     potditgp.conf("ls", "line");
     potditgp.conf("t", "potenziale");
     potditgp.conf("x", "passi");
     potditgp.conf("y", "potenziale");
     potditgp.plot(potdit, npassiplot, 1);
 
-    stimatore1gp.conf("fPath", "varmcbello/stimatore1");
+    stimatore1gp.conf("fPath", "varmcbello_out/stimatore1");
     stimatore1gp.conf("ls", "line");
     stimatore1gp.plot(stimatore1dit, npassiplot, 1);
 
-    stimatore2gp.conf("fPath", "varmcbello/stimatore2");
+    stimatore2gp.conf("fPath", "varmcbello_out/stimatore2");
     stimatore2gp.conf("ls", "line");
     stimatore2gp.plot(stimatore2dit, npassiplot, 1);
 
-    // energiagp.conf("fPath", "varmcbello/energia");
+    // energiagp.conf("fPath", "varmcbello_out/energia");
     // energiagp.conf("ls", "line");
     // energiagp.plot(energiacum, npassiplot, 1);
 
-    energiaditgp.conf("fPath", "varmcbello/energiadit");
+    energiaditgp.conf("fPath", "varmcbello_out/energiadit");
     energiaditgp.conf("ls", "line");
     energiaditgp.conf("t", "energia totale");
     energiaditgp.conf("x", "passi");
