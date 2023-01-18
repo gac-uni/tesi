@@ -268,7 +268,6 @@ int main(){
     double a1=2.5;
     double a2=5;
     double parametrilogprob[2]={a1, a2};
-    int nmod=64; // quanti punti modifico ad ogni iterazione del ciclo
 
     GnuplotDriver kengp;
     GnuplotDriver potgp;
@@ -331,8 +330,6 @@ int main(){
     int contatoreplot=0;
     double accettazione[(int)rint(npassi/freqcampionamento)]={0};
     for(int i=0; i<npassi; i++){
-        int primomod=floor((double)(rand()-1)/(double)RAND_MAX*(nparticelle-nmod));
-        int ultimomod=primomod+nmod-1;
         naccettati+=mrt(&walker, tau);
         if(i%freqcampionamento==0){
             potdit[contatoreplot]=walker.pot();
