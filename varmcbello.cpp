@@ -249,8 +249,8 @@ int main(){
     double volce=(double)nparticelle/(densita*(double)nce);
     double latoce=pow(volce, 1./3.);
     double latoscatola=latoce*pow(nce, 1./3.);
-    int npassi=10000000;
-    int freqcampionamento=1000;
+    int npassi=5000000;
+    int freqcampionamento=100;
     int npassiplot = npassi/freqcampionamento+0.5; 
     double tau=0.00002;
     double naccettati=0;
