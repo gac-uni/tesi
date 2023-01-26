@@ -36,7 +36,7 @@ class Walker{
             0) a1
             1) a2
             */
-            return -pow(parametri[0], parametri[1])*parametri[1]*(parametri[1]+1)*pow(r, -parametri[1]-2);
+            return pow(parametri[0], parametri[1])*parametri[1]*(parametri[1]+1)*pow(r, -parametri[1]-2);
         }
         double UT(double r, double * parametri){
             /*
@@ -74,12 +74,28 @@ class Walker{
             out[0]=0;
             out[1]=0;
             out[2]=0;
-            double lap=0;
-            double grad=0;
-            double gradx=0;
-            double grady=0;
-            double gradz=0;
+            double laptot=0;
+            double gradquadtot=0;
             for(int i=0;i<nparticelle; i++){
+                double lapi=0;
+                double gradxi=0;
+                double gradyi=0;
+                double gradzi=0;
+                for(int j=0;j<i;j++){
+                    double distx=px[j]-px[i];
+                    double disty=py[j]-py[i];
+                    double distz=pz[j]-pz[i];
+                    distx=distx-lscatola*rint(distx/lscatola);
+                    disty=disty-lscatola*rint(disty/lscatola);
+                    distz=distz-lscatola*rint(distz/lscatola);
+                    double dist=sqrt(distx*distx+disty*disty+distz*distz);
+                    if((dist<=lscatola/2.)){
+                        lapi+=+-1./2.*(dsecondaUT(dist, parametrilogprob)+2.*dprimaUT(dist, parametrilogprob)/dist);
+                        gradxi+=-1./2.*dprimaUT(dist, parametrilogprob)*distx/dist;
+                        gradyi+=-1./2.*dprimaUT(dist, parametrilogprob)*disty/dist;
+                        gradzi+=-1./2.*dprimaUT(dist, parametrilogprob)*distz/dist;
+                    }
+                }
                 for(int j=i+1;j<nparticelle;j++){
                     double distx=px[j]-px[i];
                     double disty=py[j]-py[i];
@@ -88,26 +104,28 @@ class Walker{
                     disty=disty-lscatola*rint(disty/lscatola);
                     distz=distz-lscatola*rint(distz/lscatola);
                     double dist=sqrt(distx*distx+disty*disty+distz*distz);
-                    if(dist<=lscatola/2.){
-                        gradx += 1./2.*dprimaUT(dist, parametrilogprob)*distx/dist;
-                        grady += 1./2.*dprimaUT(dist, parametrilogprob)*disty/dist;
-                        gradz += 1./2.*dprimaUT(dist, parametrilogprob)*distz/dist;
-                        lap += -1./2.*(dsecondaUT(dist, parametrilogprob)+2./dist*dprimaUT(dist, parametrilogprob));
+                    if((dist<=lscatola/2.)){
+                        lapi+=-1./2.*(dsecondaUT(dist, parametrilogprob)+2.*dprimaUT(dist, parametrilogprob)/dist);
+                        gradxi+=-1./2.*dprimaUT(dist, parametrilogprob)*distx/dist;
+                        gradyi+=-1./2.*dprimaUT(dist, parametrilogprob)*disty/dist;
+                        gradzi+=-1./2.*dprimaUT(dist, parametrilogprob)*distz/dist;
                     }
                 }
+                laptot+=lapi;
+                gradquadtot+=gradxi*gradxi+gradyi*gradyi+gradzi*gradzi;
             }
-            grad = gradx*gradx+grady*grady+gradz*gradz;
-            out[0]=-hqsdm*(lap+grad);
-            out[1]=hqsdm*grad;
-            out[2]=-1./2.*hqsdm*lap;
+            out[0]=-hqsdm*(laptot+gradquadtot);
+            out[1]=hqsdm*gradquadtot;
+            out[2]=-1./2.*hqsdm*laptot;
             return out;
         }
+        double Vlj(double r, double * parametri){
+            double alla3=(parametri[1]/r)*(parametri[1]/r)*(parametri[1]/r);
+            double alla6=alla3*alla3;
+            double alla12=alla6*alla6;
+            return 4*parametri[0]*(alla12-alla6);
+        }
         double pot(){
-            /*
-            parametri:
-            0) eps
-            1) sigma
-            */
             double pot1=0;
             for(int i=0; i<nparticelle; i++){
                 for(int j=i+1; j<nparticelle; j++){
@@ -119,18 +137,11 @@ class Walker{
                     distz=distz-lscatola*rint(distz/lscatola);
                     double dist=sqrt(distx*distx+disty*disty+distz*distz);                    
                     if(dist<=lscatola/2.){
-                        double r2=(parametripot[1]*parametripot[1])/(dist*dist);
-                        double r6=r2*r2*r2;
-                        double r12=r6*r6;
-                        pot1+=r12-r6;
+                        pot1+=Vlj(dist, parametripot) -Vlj(lscatola/2., parametripot);
                     }
                 }
             }
-            double taglio2=(parametripot[1]*parametripot[1])/(lscatola/2.*lscatola/2.);
-            double taglio6=taglio2*taglio2*taglio2;
-            double taglio12=taglio6*taglio6;
-            double pot=4.*parametripot[0]*(pot1-nparticelle*(nparticelle-1)/2.*(taglio12-taglio6));
-            return pot;
+            return pot1;
         }
         double logprob(){
             double psi1=0;
@@ -155,6 +166,38 @@ class Walker{
             py[npunto]+=variazione[1];
             pz[npunto]+=variazione[2];
             return 0;
+        }
+        int plotposizioni(std::string nomefile){
+            GnuplotDriver posizionigp;
+            posizionigp.ls("points");
+            posizionigp.limx(-20,20);
+            posizionigp.limy(-20,20);
+            posizionigp.limz(-20,20);
+            posizionigp.fpath(nomefile);
+            posizionigp.fext("jpg");
+            posizionigp.noprint();
+            posizionigp.plot(px, py, pz, nparticelle);
+            return 0;
+        }
+        double dmin(){
+            double dmin=10000;
+            int count=0;
+            for(int i=0;i<nparticelle;i++){
+                for(int j=i+1;j<nparticelle;j++){
+                    double distx=px[j]-px[i];
+                    double disty=py[j]-py[i];
+                    double distz=pz[j]-pz[i];
+                    // distx=distx-lscatola*rint(distx/lscatola);
+                    // disty=disty-lscatola*rint(disty/lscatola);
+                    // distz=distz-lscatola*rint(distz/lscatola);
+                    double dist=sqrt(distx*distx+disty*disty+distz*distz);
+                    if(dist<=lscatola/2.){
+                        dmin+=dist;
+                        count++;
+                    }
+                }
+            }
+            return dmin/count;
         }
         Walker(int npart, double lscat, double * ppot, int nppot, double * plogprob, int nplogprob, double * px_gen, double * py_gen, double * pz_gen){
             nparticelle=npart; 
@@ -186,8 +229,15 @@ class Walker{
     private:   
 };
 
-int mrt(Walker * walker, double tau, double * (* boxmuller)(double, double, double)){
-    // int ndamod=ultimomod-primomod+1;
+double * boxmuller(double x, double y, double sigma){
+    double * out;
+    out = new double[2];
+    out[0]=sigma*sqrt(-2*log(1-y))*cos(2*M_PI*x);
+    out[1]=sigma*sqrt(-2*log(1-y))*sin(2*M_PI*x);
+    return out;
+}
+
+int mrt(Walker * walker, double tau){
     int nparticelle=walker->nparticelle;
     double variazioni[nparticelle][3];
     double probprec=walker->logprob();
@@ -205,7 +255,8 @@ int mrt(Walker * walker, double tau, double * (* boxmuller)(double, double, doub
         delete [] tempgaussB;
     }
     for(int i=0;i<nparticelle;i++){
-        walker->applicavar(&variazioni[i][0], i);
+        double var[3]={variazioni[i][0],variazioni[i][1],variazioni[i][2]};
+        walker->applicavar(var, i);
     }
     double probsucc=walker->logprob();
     double q=exp(-probprec+probsucc); 
@@ -234,14 +285,6 @@ double * mediacumulata(double * vettore, int nelementi, int elementoiniziale){
     return cumulata;
 }
 
-double * boxmuller(double x, double y, double sigma){
-    double * out;
-    out = new double[2];
-    out[0]=sigma*sqrt(-2*log(1-y))*cos(2*M_PI*x);
-    out[1]=sigma*sqrt(-2*log(1-y))*sin(2*M_PI*x);
-    return out;
-}
-
 FILE * valori;
 FILE * out;
 
@@ -262,10 +305,10 @@ int main(){
     double volce=(double)nparticelle/(densita*(double)nce);
     double latoce=pow(volce, 1./3.);
     double latoscatola=latoce*pow(nce, 1./3.);
-    int npassi=30000000;
-    int freqcampionamento=2000;
+    int npassi=300000;
+    int freqcampionamento=300;
     int npassiplot = npassi/freqcampionamento+0.5; 
-    double tau=0.00004;
+    double tau=0.0008;
     double naccettati=0;
     double kendit[npassiplot]={0};
     double potdit[npassiplot]={0};
@@ -278,9 +321,10 @@ int main(){
     double * stimatore2cum;
     double * energiacum;
     double parametripot[2]={1, 1};
-    double a1=2.5;
+    double a1=0.9780;
     double a2=5;
     double parametrilogprob[2]={a1, a2};
+    double dmin[npassiplot]={0};
 
     GnuplotDriver kengp;
     GnuplotDriver potgp;
@@ -291,6 +335,7 @@ int main(){
     GnuplotDriver controllogp;
     GnuplotDriver energiagp;
     GnuplotDriver energiaditgp;
+    GnuplotDriver dmingp;
     valori=fopen("varmcbello_out/valori.dat", "w");
 
     // inizializzo le posizioni
@@ -312,8 +357,8 @@ int main(){
     }
 
     // plot delle posizioni iniziali
-    controllogp.conf("fPath", "varmcbello_out/posiniziale");
-    controllogp.conf("ls", "points");
+    controllogp.fpath("varmcbello_out/posiniziale");
+    controllogp.ls("points");
     controllogp.plot(posx, posy, posz, nparticelle);
 
     
@@ -323,9 +368,7 @@ int main(){
     int contatoreplot=0;
     double accettazione[(int)rint(npassi/freqcampionamento)]={0};
     for(int i=0; i<npassi; i++){
-        // int primomod=floor((double)(rand()-1)/(double)RAND_MAX*(nparticelle-nmod));
-        // int ultimomod=primomod+nmod-1;
-        naccettati+=mrt(&walker, tau, boxmuller);
+        naccettati+=mrt(&walker, tau);
         if(i%freqcampionamento==0){
             potdit[contatoreplot]=walker.pot();
             double * tempken=walker.ken();
@@ -336,6 +379,11 @@ int main(){
             delete [] tempken;
             contatoreplot++;
             accettazione[contatoreplot]=(double)naccettati/(double)i;
+            // salvo le posizioni dei punti come plot
+            // std::string nome = "varmcbello_out/pos/pos";
+            // nome = nome+std::to_string(contatoreplot);
+            // walker.plotposizioni(nome);
+            dmin[contatoreplot]=walker.dmin();
             std::cout<<"\rcompletamento: " << (double)i/(double)npassi*100. << "%, probabilità di accettazione: " << (double)naccettati/(double)i << std::flush;
         }
     }
@@ -353,46 +401,47 @@ int main(){
     }
 
     // grafici
-    // kengp.conf("fPath", "varmcbello_out/ken");
-    // kengp.conf("ls", "line");
+    // kengp.fpath("varmcbello_out/ken");
+    // kengp.ls("line");
     // kengp.plot(kencum, npassiplot, 1);
 
-    // potgp.conf("fPath", "varmcbello_out/pot");
-    // potgp.conf("ls", "line");
+    // potgp.fpath("varmcbello_out/pot");
+    // potgp.ls("line");
     // potgp.plot(potcum, npassiplot, 1);
 
-    kenditgp.conf("fPath", "varmcbello_out/kendit");
-    kenditgp.conf("ls", "line");
-    kenditgp.conf("t", "energia cinetica");
-    kenditgp.conf("x", "passi");
-    kenditgp.conf("y", "energia cinetica");
+    kenditgp.fpath("varmcbello_out/kendit");
+    kenditgp.ls("line");
+    kenditgp.t("energia cinetica");
+    kenditgp.y("energia [adimensionale]");
     kenditgp.plot(kendit, npassiplot, 1);
 
-    potditgp.conf("fPath", "varmcbello_out/potdit");
-    potditgp.conf("ls", "line");
-    potditgp.conf("t", "potenziale");
-    potditgp.conf("x", "passi");
-    potditgp.conf("y", "potenziale");
+    potditgp.fpath("varmcbello_out/potdit");
+    potditgp.ls("line");
+    potditgp.t("potenziale");
+    potditgp.y("energia [adimensionale]");
     potditgp.plot(potdit, npassiplot, 1);
 
-    stimatore1gp.conf("fPath", "varmcbello_out/stimatore1");
-    stimatore1gp.conf("ls", "line");
+    stimatore1gp.fpath("varmcbello_out/stimatore1");
+    stimatore1gp.ls("line");
     stimatore1gp.plot(stimatore1dit, npassiplot, 1);
 
-    stimatore2gp.conf("fPath", "varmcbello_out/stimatore2");
-    stimatore2gp.conf("ls", "line");
+    stimatore1gp.fpath("varmcbello_out/stimatore2");
+    stimatore1gp.ls("line");
     stimatore2gp.plot(stimatore2dit, npassiplot, 1);
 
-    // energiagp.conf("fPath", "varmcbello_out/energia");
-    // energiagp.conf("ls", "line");
-    // energiagp.plot(energiacum, npassiplot, 1);
+    // energiagp.fpath("varmcbello_out/energia");
+    // energiagp.ls("line");
+    // energiagp.plot(energiacum, npassiplot, 1)
 
-    energiaditgp.conf("fPath", "varmcbello_out/energiadit");
-    energiaditgp.conf("ls", "line");
-    energiaditgp.conf("t", "energia totale");
-    energiaditgp.conf("x", "passi");
-    energiaditgp.conf("y", "energia totale");
+    energiaditgp.fpath("varmcbello_out/energiadit");
+    energiaditgp.ls("line");
+    energiaditgp.t("potenziale");
+    energiaditgp.y("energia [adimensionale]");
     energiaditgp.plot(energia, npassiplot, 1);
+
+    dmingp.fpath("varmcbello_out/dmin");
+    dmingp.ls("line");
+    dmingp.plot(dmin, npassiplot, 1);
 
     // calcolo le varianze
     double potquadmedio=0;
