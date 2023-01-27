@@ -1,9 +1,5 @@
-#include <iostream>
-#include <cmath>
-#include <cstdio>
-#include <cassert>
-#include <utility>
 #include "gpd.h"
+#include "variables.h"
 
 void invertivettori(double * v1, double * v2, int lunghezza){
     double temp;
@@ -37,7 +33,7 @@ class Walker{
         double * parametrilogprob;
         double hqsdm = 0.09076;
         double peso=0;
-        bool interpolapeso=0.8;
+        double interpolapeso=0.8;
         double eT=1;
         double dzeroU(double r, double * parametri){
             /*
@@ -144,7 +140,7 @@ class Walker{
                 for(int j=i+1; j<nparticelle; j++){
                     double dist=sqrt(ptppvx[nparticelle*i+j]*ptppvx[nparticelle*i+j]+ptppvy[nparticelle*i+j]*ptppvy[nparticelle*i+j]+ptppvz[nparticelle*i+j]*ptppvz[nparticelle*i+j]);
                     if(dist<=lscatola/2.){
-                        pot1+=Vlj(dist, parametripot) -Vlj(lscatola/2., parametripot);
+                        pot1+=Vlj(dist, parametripot)-Vlj(lscatola/2., parametripot);
                     }
                 }
             }
@@ -231,8 +227,9 @@ class Walker{
                 }
             }
         }
-        int computepeso(int accettato, double tau){
+        void computepeso(int accettato, double tau, double * potenziale){
             double vR = pot();
+            *potenziale=vR;
             double vRP=0;
             if(accettato){ // allora il passo è stato fatto dallo stato in ptppvxtemp (R') allo stato in ptppvx (R)
                 vRP=potdatemp();
@@ -240,6 +237,7 @@ class Walker{
                 vRP=vR;
             }
             double pesoattuale=exp(-tau/2.*(vR+vRP-2*eT));
+            peso=interpolapeso*peso+(1.-interpolapeso)*pesoattuale;
         }
         Walker(int npart, double lscat, double * ppot, int nppot, double * plogprob, int nplogprob, double * px_gen, double * py_gen, double * pz_gen){
             nparticelle=npart; 
@@ -286,10 +284,46 @@ class Walker{
             delete [] px;
             delete [] py;
             delete [] pz;
+            delete [] ppvx;
+            delete [] ppvy;
+            delete [] ppvz;
+            delete [] ppvxtemp;
+            delete [] ppvytemp;
+            delete [] ppvztemp; 
             delete [] parametrilogprob;
             delete [] parametripot;
         }  
-    private:   
+};
+
+class Observables{
+    public:
+        double * vPot;
+        double * vKen;
+        double * vStim1;
+        double * vStim2;
+        double * vEn;
+        double * vAcc;
+        double * vPesi;
+        int nelem;
+        Observables(int nelementi){
+            nelem = nelementi;
+            vPot = new double[nelem];
+            vKen = new double[nelem];
+            vStim1 = new double[nelem];
+            vStim2 = new double[nelem];
+            vEn = new double[nelem];
+            vAcc = new double[nelem];
+            vPesi = new double[nelem];
+        }
+        ~Observables(){
+            delete [] vPot;
+            delete [] vKen;
+            delete [] vStim1;
+            delete [] vStim2;
+            delete [] vEn;
+            delete [] vAcc;
+            delete [] vPesi;
+        }
 };
 
 double * boxmuller(double x, double y, double sigma){
@@ -336,7 +370,6 @@ int mrt(Walker * walker, double tau, int count){
     walker->computepv(walker->ptppvx,walker->ptppvy,walker->ptppvz);
     double probsucc=walker->logprob();
     double q=exp(-probprec+probsucc); 
-    // std::cout << probprec << " " << probsucc << std::endl;
     if(q>1){
         return 1;
     }
@@ -347,6 +380,7 @@ int mrt(Walker * walker, double tau, int count){
         double menovar[3]={-variazioni[i][0],-variazioni[i][1],-variazioni[i][2]};
         walker->applicavar(menovar, i);
     }
+    // sposto allo stato originale se rifiuto il passo
     tempx = walker->ptppvxtemp;
     tempy = walker->ptppvytemp;
     tempz = walker->ptppvztemp;
@@ -371,48 +405,9 @@ double * mediacumulata(double * vettore, int nelementi, int elementoiniziale){
     return cumulata;
 }
 
-FILE * valori;
-FILE * out;
-
 int main(){
     srand(69);
-    out = fopen("out.dat", "w");
-    // parametri che definiscono il tipo di reticolo usato per inizializzare le posizioni
-    // int particelleperce=4; // particelle per cella elementare
-    // double posizioniince[4][3]={{0, 0, 0}, {0.5, 0.5, 0}, {0, 0.5, 0.5}, {0.5, 0, 0.5}}; // posizione della particella nella cella elementare
-    int particelleperce=1; // particelle per cella elementare
-    double posizioniince[1][3]={{0,0,0}}; // posizione della particella nella cella elementare
-
-    int nparticelle=64;
-    double eps=10.22;
-    double sigma=2.556;
-    double densita=0.0218*sigma*sigma*sigma; // in unità adimensionali \tilda(r)=r/sigma
-    int nce=(nparticelle/particelleperce);
-    double volce=(double)nparticelle/(densita*(double)nce);
-    double latoce=pow(volce, 1./3.);
-    double latoscatola=latoce*pow(nce, 1./3.);
-    int npassi=100000;
-    int freqcampionamento=100;
-    int npassiplot = npassi/freqcampionamento+0.5; 
-    double tau=0.0008;
-    double naccettati=0;
-    double kendit[npassiplot]={0};
-    double potdit[npassiplot]={0};
-    double stimatore1dit[npassiplot]={0};
-    double stimatore2dit[npassiplot]={0};
-    double energia[npassiplot]={0};
-    double * kencum;
-    double * potcum;
-    double * stimatore1cum;
-    double * stimatore2cum;
-    double * energiacum;
-    double parametripot[2]={1, 1};
-    double a1=0.9780;
-    double a2=5;
-    double parametrilogprob[2]={a1, a2};
-    double dmin[npassiplot]={0};
-    double pesi[npassiplot]={0};
-
+    
     GnuplotDriver kengp;
     GnuplotDriver potgp;
     GnuplotDriver kenditgp;
@@ -449,46 +444,49 @@ int main(){
     controllogp.plot(posx, posy, posz, nparticelle);
     
     Walker walker(nparticelle, latoscatola, &parametripot[0], 2, &parametrilogprob[0], 2, posx, posy, posz);
+    Observables obs(npassiplot);
 
     // evoluzione temporale
     int contatoreplot=0;
-    double accettazione[(int)rint(npassi/freqcampionamento)]={0};
+    double naccettati=0;
     for(int i=0; i<npassi; i++){
         int accettato;
-        double peso;
         accettato=mrt(&walker, tau, i);
-        peso=walker.computepeso(accettato, tau);
         naccettati+=accettato;
         if(i%freqcampionamento==0){
-            pesi[contatoreplot]=peso;
-            potdit[contatoreplot]=walker.pot();
+            walker.computepeso(accettato, tau, &(obs.vPot[contatoreplot]));
+            obs.vPesi[contatoreplot]=walker.peso;
             double * tempken=walker.ken();
-            kendit[contatoreplot]=tempken[0];
-            stimatore1dit[contatoreplot]=tempken[1];
-            stimatore2dit[contatoreplot]=tempken[2];
-            energia[contatoreplot]=kendit[contatoreplot]+potdit[contatoreplot];
+            obs.vKen[contatoreplot]=tempken[0];
+            obs.vStim1[contatoreplot]=tempken[1];
+            obs.vStim2[contatoreplot]=tempken[2];
+            obs.vEn[contatoreplot]=obs.vKen[contatoreplot]+obs.vPot[contatoreplot];
             delete [] tempken;
             contatoreplot++;
-            accettazione[contatoreplot]=(double)naccettati/(double)i;
+            obs.vAcc[contatoreplot]=(double)naccettati/(double)i;
             // salvo le posizioni dei punti come plot
             // std::string nome = "varmcbello_out/pos/pos";
             // nome = nome+std::to_string(contatoreplot);
             // walker.plotposizioni(nome);
-            // dmin[contatoreplot]=walker.dmin();
             std::cout<<"\rcompletamento: " << (double)i/(double)npassi*100. << "%, probabilità di accettazione: " << (double)naccettati/(double)i << std::flush;
         }
     }
     std::cout<<std::endl;
 
     // faccio le medie cumulate
-    kencum=mediacumulata(kendit, npassiplot, 0);
-    potcum=mediacumulata(potdit, npassiplot, 0);
-    stimatore1cum=mediacumulata(stimatore1dit, npassiplot, 0);
-    stimatore2cum=mediacumulata(stimatore2dit, npassiplot, 0);
-    energiacum=mediacumulata(energia, npassiplot, 0);
+    double * kencum;
+    double * potcum;
+    double * stimatore1cum;
+    double * stimatore2cum;
+    double * energiacum;
+    kencum=mediacumulata(obs.vKen, npassiplot, 0);
+    potcum=mediacumulata(obs.vPot, npassiplot, 0);
+    stimatore1cum=mediacumulata(obs.vStim1, npassiplot, 0);
+    stimatore2cum=mediacumulata(obs.vStim1, npassiplot, 0);
+    energiacum=mediacumulata(obs.vEn, npassiplot, 0);
 
     for(int i=0;i<npassiplot; i++){
-        fprintf(out, "%lf %lf\n", kendit[i], potdit[i]);
+        fprintf(out, "%lf %lf\n", obs.vKen[i], obs.vPot[i]);
     }
 
     // grafici
@@ -504,21 +502,21 @@ int main(){
     kenditgp.ls("line");
     kenditgp.t("energia cinetica");
     kenditgp.y("energia [adimensionale]");
-    kenditgp.plot(kendit, npassiplot, 1);
+    kenditgp.plot(obs.vKen, npassiplot, 1);
 
     potditgp.fpath("varmcbello_out/potdit");
     potditgp.ls("line");
     potditgp.t("potenziale");
     potditgp.y("energia [adimensionale]");
-    potditgp.plot(potdit, npassiplot, 1);
+    potditgp.plot(obs.vPot, npassiplot, 1);
 
     stimatore1gp.fpath("varmcbello_out/stimatore1");
     stimatore1gp.ls("line");
-    stimatore1gp.plot(stimatore1dit, npassiplot, 1);
+    stimatore1gp.plot(obs.vStim1, npassiplot, 1);
 
     stimatore2gp.fpath("varmcbello_out/stimatore2");
     stimatore2gp.ls("line");
-    stimatore2gp.plot(stimatore2dit, npassiplot, 1);
+    stimatore2gp.plot(obs.vStim1, npassiplot, 1);
 
     // energiagp.fpath("varmcbello_out/energia");
     // energiagp.ls("line");
@@ -528,12 +526,12 @@ int main(){
     energiaditgp.ls("line");
     energiaditgp.t("potenziale");
     energiaditgp.y("energia [adimensionale]");
-    energiaditgp.plot(energia, npassiplot, 1);
+    energiaditgp.plot(obs.vEn, npassiplot, 1);
 
     pesoditgp.fpath("varmcbello_out/pesodit");
     pesoditgp.ls("line");
     pesoditgp.t("peso");
-    pesoditgp.plot(pesi, npassiplot, 1);
+    pesoditgp.plot(obs.vPesi, npassiplot, 1);
 
     // calcolo le varianze
     double potquadmedio=0;
@@ -542,11 +540,11 @@ int main(){
     double stim2quadmedio=0;
     double energiaquadmedio=0;
     for(int i=0;i<npassiplot;i++){
-        potquadmedio+=potdit[i]*potdit[i]/npassi;
-        kenquadmedio+=kendit[i]*kendit[i]/npassi;
-        stim1quadmedio+=stimatore1dit[i]*stimatore1dit[i]/npassi;
-        stim2quadmedio+=stimatore2dit[i]*stimatore2dit[i]/npassi;
-        energiaquadmedio+=energia[i]*energia[i];
+        potquadmedio+=obs.vPot[i]*obs.vPot[i]/npassi;
+        kenquadmedio+=obs.vKen[i]*obs.vKen[i]/npassi;
+        stim1quadmedio+=obs.vStim1[i]*obs.vStim1[i]/npassi;
+        stim2quadmedio+=obs.vStim2[i]*obs.vStim2[i]/npassi;
+        energiaquadmedio+=obs.vEn[i]*obs.vEn[i];
     }
     double varken=kenquadmedio-(kencum[npassiplot-1]*kencum[npassiplot-1]);
     double varpot=potquadmedio-(potcum[npassiplot-1]*potcum[npassiplot-1]);
