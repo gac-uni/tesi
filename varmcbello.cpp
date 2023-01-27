@@ -2,18 +2,43 @@
 #include <cmath>
 #include <cstdio>
 #include <cassert>
+#include <utility>
 #include "gpd.h"
+
+void invertivettori(double * v1, double * v2, int lunghezza){
+    double temp;
+    for(int i=0;i<lunghezza;i++){
+        temp = v1[i];
+        v1[i]=v2[i];
+        v2[i]=temp;
+    }
+}
 
 class Walker{
     public:      
+        double * px;
+        double * py;
+        double * pz;  
         double * ppvx;
         double * ppvy;
-        double * ppvz;
+        double * ppvz;  
+        double * ppvxtemp;
+        double * ppvytemp;
+        double * ppvztemp;
+        double * ptppvx;
+        double * ptppvy;
+        double * ptppvz;
+        double * ptppvxtemp;
+        double * ptppvytemp;
+        double * ptppvztemp;
         int nparticelle;
         double lscatola;
         double * parametripot;
         double * parametrilogprob;
         double hqsdm = 0.09076;
+        double peso=0;
+        bool interpolapeso=0.8;
+        double eT=1;
         double dzeroU(double r, double * parametri){
             /*
             parametri: 
@@ -81,22 +106,22 @@ class Walker{
                 double gradxi=0;
                 double gradyi=0;
                 double gradzi=0;
-                for(int j=0;j<i;j++){                    
-                    double dist=sqrt((ppvx[nparticelle*i+j]*ppvx[nparticelle*i+j])+(ppvy[nparticelle*i+j]*ppvy[nparticelle*i+j])+(ppvz[nparticelle*i+j]*ppvz[nparticelle*i+j]));
+                for(int j=0;j<i;j++){
+                    double dist=sqrt(ptppvx[nparticelle*j+i]*ptppvx[nparticelle*j+i]+ptppvy[nparticelle*j+i]*ptppvy[nparticelle*j+i]+ptppvz[nparticelle*j+i]*ptppvz[nparticelle*j+i]);
                     if((dist<=lscatola/2.)){
-                        lapi+=+-1./2.*(dsecondaUT(dist, parametrilogprob)+2.*dprimaUT(dist, parametrilogprob)/dist);
-                        gradxi+=-1./2.*dprimaUT(dist, parametrilogprob)*ppvx[nparticelle*i+j]/dist;
-                        gradyi+=-1./2.*dprimaUT(dist, parametrilogprob)*ppvy[nparticelle*i+j]/dist;
-                        gradzi+=-1./2.*dprimaUT(dist, parametrilogprob)*ppvz[nparticelle*i+j]/dist;
+                        lapi+=-1./2.*(dsecondaUT(dist, parametrilogprob)+2.*dprimaUT(dist, parametrilogprob)/dist);
+                        gradxi+=1./2.*dprimaUT(dist, parametrilogprob)*ptppvx[nparticelle*j+i]/dist;
+                        gradyi+=1./2.*dprimaUT(dist, parametrilogprob)*ptppvy[nparticelle*j+i]/dist;
+                        gradzi+=1./2.*dprimaUT(dist, parametrilogprob)*ptppvz[nparticelle*j+i]/dist;
                     }
                 }
                 for(int j=i+1;j<nparticelle;j++){
-                    double dist=sqrt((ppvx[nparticelle*i+j]*ppvx[nparticelle*i+j])+(ppvy[nparticelle*i+j]*ppvy[nparticelle*i+j])+(ppvz[nparticelle*i+j]*ppvz[nparticelle*i+j]));
+                    double dist=sqrt(ptppvx[nparticelle*i+j]*ptppvx[nparticelle*i+j]+ptppvy[nparticelle*i+j]*ptppvy[nparticelle*i+j]+ptppvz[nparticelle*i+j]*ptppvz[nparticelle*i+j]);
                     if((dist<=lscatola/2.)){
                         lapi+=-1./2.*(dsecondaUT(dist, parametrilogprob)+2.*dprimaUT(dist, parametrilogprob)/dist);
-                        gradxi+=-1./2.*dprimaUT(dist, parametrilogprob)*ppvx[nparticelle*i+j]/dist;
-                        gradyi+=-1./2.*dprimaUT(dist, parametrilogprob)*ppvy[nparticelle*i+j]/dist;
-                        gradzi+=-1./2.*dprimaUT(dist, parametrilogprob)*ppvz[nparticelle*i+j]/dist;
+                        gradxi+=-1./2.*dprimaUT(dist, parametrilogprob)*ptppvx[nparticelle*i+j]/dist;
+                        gradyi+=-1./2.*dprimaUT(dist, parametrilogprob)*ptppvy[nparticelle*i+j]/dist;
+                        gradzi+=-1./2.*dprimaUT(dist, parametrilogprob)*ptppvz[nparticelle*i+j]/dist;
                     }
                 }
                 laptot+=lapi;
@@ -116,10 +141,22 @@ class Walker{
         double pot(){
             double pot1=0;
             for(int i=0; i<nparticelle; i++){
-                for(int j=i+1; j<nparticelle; j++){                       
-                    double dist=sqrt((ppvx[nparticelle*i+j]*ppvx[nparticelle*i+j])+(ppvy[nparticelle*i+j]*ppvy[nparticelle*i+j])+(ppvz[nparticelle*i+j]*ppvz[nparticelle*i+j]));
+                for(int j=i+1; j<nparticelle; j++){
+                    double dist=sqrt(ptppvx[nparticelle*i+j]*ptppvx[nparticelle*i+j]+ptppvy[nparticelle*i+j]*ptppvy[nparticelle*i+j]+ptppvz[nparticelle*i+j]*ptppvz[nparticelle*i+j]);
                     if(dist<=lscatola/2.){
-                        pot1+=Vlj(dist, parametripot)-Vlj(lscatola/2., parametripot);
+                        pot1+=Vlj(dist, parametripot) -Vlj(lscatola/2., parametripot);
+                    }
+                }
+            }
+            return pot1;
+        }
+        double potdatemp(){
+            double pot1=0;
+            for(int i=0; i<nparticelle; i++){
+                for(int j=i+1; j<nparticelle; j++){
+                    double dist=sqrt(ptppvxtemp[nparticelle*i+j]*ptppvxtemp[nparticelle*i+j]+ptppvytemp[nparticelle*i+j]*ptppvytemp[nparticelle*i+j]+ptppvztemp[nparticelle*i+j]*ptppvztemp[nparticelle*i+j]);
+                    if(dist<=lscatola/2.){
+                        pot1+=Vlj(dist, parametripot) -Vlj(lscatola/2., parametripot);
                     }
                 }
             }
@@ -129,35 +166,82 @@ class Walker{
             double psi1=0;
             for(int i=0;i<nparticelle;i++){
                 for(int j=i+1;j<nparticelle;j++){
-                    double distanza=sqrt((ppvx[nparticelle*i+j]*ppvx[nparticelle*i+j])+(ppvy[nparticelle*i+j]*ppvy[nparticelle*i+j])+(ppvz[nparticelle*i+j]*ppvz[nparticelle*i+j]));
-                    if(distanza<=lscatola/2.){
-                        psi1+=UT(distanza, parametrilogprob);
+                    double dist=sqrt(ptppvx[nparticelle*i+j]*ptppvx[nparticelle*i+j]+ptppvy[nparticelle*i+j]*ptppvy[nparticelle*i+j]+ptppvz[nparticelle*i+j]*ptppvz[nparticelle*i+j]);
+                    if(dist<=lscatola/2.){
+                        psi1+=UT(dist, parametrilogprob);
                     }
                 }
             }
             return -psi1;
         }
-        int varpv(double variazione[3], int npunto){
-            for(int k=0;k<nparticelle;k++){
-                ppvx[nparticelle*npunto+k]=(ppvx[nparticelle*npunto+k]+variazione[0])-lscatola*rint((ppvx[nparticelle*npunto+k]+variazione[0])/lscatola);
-                ppvx[nparticelle*k+npunto]=(ppvx[nparticelle*k+npunto]-variazione[0])-lscatola*rint((ppvx[nparticelle*k+npunto]-variazione[0])/lscatola);
-                ppvy[nparticelle*npunto+k]=(ppvy[nparticelle*npunto+k]+variazione[1])-lscatola*rint((ppvy[nparticelle*npunto+k]+variazione[1])/lscatola);
-                ppvy[nparticelle*k+npunto]=(ppvy[nparticelle*k+npunto]-variazione[1])-lscatola*rint((ppvy[nparticelle*k+npunto]-variazione[1])/lscatola);
-                ppvz[nparticelle*npunto+k]=(ppvz[nparticelle*npunto+k]+variazione[2])-lscatola*rint((ppvz[nparticelle*npunto+k]+variazione[2])/lscatola);
-                ppvz[nparticelle*k+npunto]=(ppvz[nparticelle*k+npunto]-variazione[2])-lscatola*rint((ppvz[nparticelle*k+npunto]-variazione[2])/lscatola);
-            }
+        int applicavar(double variazione[3], int npunto){
+            px[npunto]+=variazione[0];
+            py[npunto]+=variazione[1];
+            pz[npunto]+=variazione[2];
             return 0;
         }
         int plotposizioni(std::string nomefile){
-            GnuplotDriver gp;
-            gp.fpath(nomefile);
-            gp.fext("jpg");
-            gp.ls("points");
-            gp.noprint();
-            gp.plot(ppvx, ppvy, ppvz, nparticelle);
+            GnuplotDriver posizionigp;
+            posizionigp.ls("points");
+            posizionigp.limx(-20,20);
+            posizionigp.limy(-20,20);
+            posizionigp.limz(-20,20);
+            posizionigp.fpath(nomefile);
+            posizionigp.fext("jpg");
+            posizionigp.noprint();
+            posizionigp.plot(px, py, pz, nparticelle);
             return 0;
         }
-        Walker(int npart, double lscat, double * ppot, int nppot, double * plogprob, int nplogprob, double * ppvx_gen, double * ppvy_gen, double * ppvz_gen){
+        double davg(){
+            double davg=0;
+            int count=0;
+            for(int i=0;i<nparticelle;i++){
+                for(int j=i+1;j<nparticelle;j++){
+                    double dist=sqrt(ptppvx[nparticelle*i+j]*ptppvx[nparticelle*i+j]+ptppvy[nparticelle*i+j]*ptppvy[nparticelle*i+j]+ptppvz[nparticelle*i+j]*ptppvz[nparticelle*i+j]);
+                    if(dist<=lscatola/2.){
+                        davg+=dist;
+                        count++;
+                    }
+                }
+            }
+            return davg/count;
+        }
+        double dmin(){
+            double dmin=10000;
+            int count=0;
+            for(int i=0;i<nparticelle;i++){
+                for(int j=i+1;j<nparticelle;j++){
+                    double dist=sqrt(ptppvx[nparticelle*i+j]*ptppvx[nparticelle*i+j]+ptppvy[nparticelle*i+j]*ptppvy[nparticelle*i+j]+ptppvz[nparticelle*i+j]*ptppvz[nparticelle*i+j]);
+                    if(dist<=dmin){
+                        dmin=dist;
+                    }
+                }
+            }
+            return dmin;
+        }
+        void computepv(double * locationx, double * locationy, double * locationz){
+            for(int i=0;i<nparticelle;i++){
+                for(int j=i+1;j<nparticelle;j++){
+                    double tempx=px[j]-px[i];
+                    double tempy=py[j]-py[i];
+                    double tempz=pz[j]-pz[i];
+                    locationx[nparticelle*i+j]=tempx-lscatola*rint(tempx/lscatola);
+                    locationy[nparticelle*i+j]=tempy-lscatola*rint(tempy/lscatola);
+                    locationz[nparticelle*i+j]=tempz-lscatola*rint(tempz/lscatola);
+                }
+            }
+        }
+        int computepeso(int accettato, double tau){
+            double vR = pot();
+            double vRP=0;
+            if(accettato){ // allora il passo è stato fatto dallo stato in ptppvxtemp (R') allo stato in ptppvx (R)
+                vRP=potdatemp();
+            }else{
+                vRP=vR;
+            }
+            double pesoattuale=exp(-tau/2.*(vR+vRP-2*eT));
+        }
+        Walker(int npart, double lscat, double * ppot, int nppot, double * plogprob, int nplogprob, double * px_gen, double * py_gen, double * pz_gen){
             nparticelle=npart; 
             lscatola=lscat;
             parametripot = new double[nppot];
@@ -168,24 +252,44 @@ class Walker{
             for(int i=0;i<nplogprob;i++){
                 parametrilogprob[i]=plogprob[i];
             }
-            ppvx=new double[nparticelle*nparticelle];
-            ppvy=new double[nparticelle*nparticelle];
-            ppvz=new double[nparticelle*nparticelle];
+            px=new double[nparticelle];
+            py=new double[nparticelle];
+            pz=new double[nparticelle];
+            for(int j=0;j<nparticelle;j++){
+                px[j]=px_gen[j];
+                py[j]=py_gen[j];
+                pz[j]=pz_gen[j];
+            }   
+            // inizializzo le matrici dei primi vicini
+            ppvx = new double[nparticelle*nparticelle];
+            ppvy = new double[nparticelle*nparticelle];
+            ppvz = new double[nparticelle*nparticelle];
+            ppvxtemp = new double[nparticelle*nparticelle];
+            ppvytemp = new double[nparticelle*nparticelle];
+            ppvztemp = new double[nparticelle*nparticelle];
             for(int i=0;i<nparticelle;i++){
                 for(int j=0;j<nparticelle;j++){
-                    ppvx[nparticelle*i+j]=ppvx_gen[nparticelle*i+j];
-                    ppvy[nparticelle*i+j]=ppvy_gen[nparticelle*i+j];
-                    ppvz[nparticelle*i+j]=ppvz_gen[nparticelle*i+j];
-                }    
+                    ppvx[nparticelle*i+j] = 0;
+                    ppvy[nparticelle*i+j] = 0; 
+                    ppvz[nparticelle*i+j] = 0; 
+                }
             }
+            computepv(ppvx, ppvy, ppvz);  
+            ptppvx = ppvx;
+            ptppvy = ppvy;
+            ptppvz = ppvz;
+            ptppvxtemp = ppvxtemp;
+            ptppvytemp = ppvytemp;
+            ptppvztemp = ppvztemp;            
         }        
         ~Walker(){
-            delete [] ppvx;
-            delete [] ppvy;
-            delete [] ppvz;
+            delete [] px;
+            delete [] py;
+            delete [] pz;
             delete [] parametrilogprob;
             delete [] parametripot;
         }  
+    private:   
 };
 
 double * boxmuller(double x, double y, double sigma){
@@ -196,10 +300,10 @@ double * boxmuller(double x, double y, double sigma){
     return out;
 }
 
-int mrt(Walker * walker, double tau){
-    int nparticelle = walker->nparticelle;
+int mrt(Walker * walker, double tau, int count){
+    int nparticelle=walker->nparticelle;
     double variazioni[nparticelle][3];
-    double probprec=(*walker).logprob();
+    double probprec=walker->logprob();
     for(int i=0;i<nparticelle;i++){
         double tempA=(double)rand()/(double)RAND_MAX;
         double tempB=(double)rand()/(double)RAND_MAX;
@@ -214,10 +318,25 @@ int mrt(Walker * walker, double tau){
         delete [] tempgaussB;
     }
     for(int i=0;i<nparticelle;i++){
-        (*walker).varpv(&variazioni[i][0], i);
+        double var[3]={variazioni[i][0],variazioni[i][1],variazioni[i][2]};
+        walker->applicavar(var, i);
     }
-    double probsucc=(*walker).logprob();
+    // sposto i vecchi ppv nei temp
+    double * tempx = walker->ptppvxtemp;
+    double * tempy = walker->ptppvytemp;
+    double * tempz = walker->ptppvztemp;
+    walker->ptppvxtemp = walker->ptppvx;
+    walker->ptppvytemp = walker->ptppvy;
+    walker->ptppvztemp = walker->ptppvz;
+    walker->ptppvx=tempx;
+    walker->ptppvy=tempy;
+    walker->ptppvz=tempz;
+    
+    // calcolo la configurazione nuova in ppvx, y e z
+    walker->computepv(walker->ptppvx,walker->ptppvy,walker->ptppvz);
+    double probsucc=walker->logprob();
     double q=exp(-probprec+probsucc); 
+    // std::cout << probprec << " " << probsucc << std::endl;
     if(q>1){
         return 1;
     }
@@ -225,9 +344,18 @@ int mrt(Walker * walker, double tau){
         return 1;
     }
     for(int i=0;i<nparticelle;i++){
-        double menovar[3]={-variazioni[i][0], -variazioni[i][1], -variazioni[i][2]};
-        (*walker).varpv(menovar, i);
+        double menovar[3]={-variazioni[i][0],-variazioni[i][1],-variazioni[i][2]};
+        walker->applicavar(menovar, i);
     }
+    tempx = walker->ptppvxtemp;
+    tempy = walker->ptppvytemp;
+    tempz = walker->ptppvztemp;
+    walker->ptppvxtemp = walker->ptppvx;
+    walker->ptppvytemp = walker->ptppvy;
+    walker->ptppvztemp = walker->ptppvz;
+    walker->ptppvx=tempx;
+    walker->ptppvy=tempy;
+    walker->ptppvz=tempz;
     return 0;
 }
 
@@ -263,8 +391,8 @@ int main(){
     double volce=(double)nparticelle/(densita*(double)nce);
     double latoce=pow(volce, 1./3.);
     double latoscatola=latoce*pow(nce, 1./3.);
-    int npassi=300000;
-    int freqcampionamento=300;
+    int npassi=100000;
+    int freqcampionamento=100;
     int npassiplot = npassi/freqcampionamento+0.5; 
     double tau=0.0008;
     double naccettati=0;
@@ -279,9 +407,11 @@ int main(){
     double * stimatore2cum;
     double * energiacum;
     double parametripot[2]={1, 1};
-    double a1=0.978;
+    double a1=0.9780;
     double a2=5;
     double parametrilogprob[2]={a1, a2};
+    double dmin[npassiplot]={0};
+    double pesi[npassiplot]={0};
 
     GnuplotDriver kengp;
     GnuplotDriver potgp;
@@ -292,6 +422,7 @@ int main(){
     GnuplotDriver controllogp;
     GnuplotDriver energiagp;
     GnuplotDriver energiaditgp;
+    GnuplotDriver pesoditgp;
     valori=fopen("varmcbello_out/valori.dat", "w");
 
     // inizializzo le posizioni
@@ -316,36 +447,20 @@ int main(){
     controllogp.fpath("varmcbello_out/posiniziale");
     controllogp.ls("points");
     controllogp.plot(posx, posy, posz, nparticelle);
-
-    // calcolo ppv
-    double * ppvx;
-    double * ppvy;
-    double * ppvz;
-    ppvx = new double[nparticelle*nparticelle];    
-    ppvy = new double[nparticelle*nparticelle];
-    ppvz = new double[nparticelle*nparticelle];
-    for(int i=0; i<nparticelle; i++){
-        for(int j=0; j<nparticelle; j++){
-            double tempx=posx[j]-posx[i];
-            ppvx[i*nparticelle+j]=tempx-latoscatola*rint(tempx/latoscatola);
-            double tempy=posy[j]-posy[i];
-            ppvy[i*nparticelle+j]=tempy-latoscatola*rint(tempy/latoscatola);
-            double tempz=posz[j]-posz[i];
-            ppvz[i*nparticelle+j]=tempz-latoscatola*rint(tempz/latoscatola);
-        }
-    }
-
-    Walker walker(nparticelle, latoscatola, &parametripot[0], 2, &parametrilogprob[0], 2, &ppvx[0], &ppvy[0], &ppvz[0]);
-    delete [] ppvx;
-    delete [] ppvy;
-    delete [] ppvz;
+    
+    Walker walker(nparticelle, latoscatola, &parametripot[0], 2, &parametrilogprob[0], 2, posx, posy, posz);
 
     // evoluzione temporale
     int contatoreplot=0;
     double accettazione[(int)rint(npassi/freqcampionamento)]={0};
     for(int i=0; i<npassi; i++){
-        naccettati+=mrt(&walker, tau);
+        int accettato;
+        double peso;
+        accettato=mrt(&walker, tau, i);
+        peso=walker.computepeso(accettato, tau);
+        naccettati+=accettato;
         if(i%freqcampionamento==0){
+            pesi[contatoreplot]=peso;
             potdit[contatoreplot]=walker.pot();
             double * tempken=walker.ken();
             kendit[contatoreplot]=tempken[0];
@@ -356,9 +471,10 @@ int main(){
             contatoreplot++;
             accettazione[contatoreplot]=(double)naccettati/(double)i;
             // salvo le posizioni dei punti come plot
-            std::string nome = "varmcbello_out/pos/pos";
-            nome = nome+std::to_string(contatoreplot);
-            walker.plotposizioni(nome);
+            // std::string nome = "varmcbello_out/pos/pos";
+            // nome = nome+std::to_string(contatoreplot);
+            // walker.plotposizioni(nome);
+            // dmin[contatoreplot]=walker.dmin();
             std::cout<<"\rcompletamento: " << (double)i/(double)npassi*100. << "%, probabilità di accettazione: " << (double)naccettati/(double)i << std::flush;
         }
     }
@@ -400,8 +516,8 @@ int main(){
     stimatore1gp.ls("line");
     stimatore1gp.plot(stimatore1dit, npassiplot, 1);
 
-    stimatore1gp.fpath("varmcbello_out/stimatore2");
-    stimatore1gp.ls("line");
+    stimatore2gp.fpath("varmcbello_out/stimatore2");
+    stimatore2gp.ls("line");
     stimatore2gp.plot(stimatore2dit, npassiplot, 1);
 
     // energiagp.fpath("varmcbello_out/energia");
@@ -413,6 +529,11 @@ int main(){
     energiaditgp.t("potenziale");
     energiaditgp.y("energia [adimensionale]");
     energiaditgp.plot(energia, npassiplot, 1);
+
+    pesoditgp.fpath("varmcbello_out/pesodit");
+    pesoditgp.ls("line");
+    pesoditgp.t("peso");
+    pesoditgp.plot(pesi, npassiplot, 1);
 
     // calcolo le varianze
     double potquadmedio=0;
