@@ -306,9 +306,6 @@ int mrt(Walker * walker, double tau, int count){
     walker->ptppvx=tempx;
     walker->ptppvy=tempy;
     walker->ptppvz=tempz;
-    // invertivettori(walker->ppvx, walker->ppvxtemp, nparticelle*nparticelle);
-    // invertivettori(walker->ppvy, walker->ppvytemp, nparticelle*nparticelle);
-    // invertivettori(walker->ppvz, walker->ppvztemp, nparticelle*nparticelle);
     
     // calcolo la configurazione nuova in ppvx, y e z
     walker->computepv(walker->ptppvx,walker->ptppvy,walker->ptppvz);
@@ -334,9 +331,6 @@ int mrt(Walker * walker, double tau, int count){
     walker->ptppvx=tempx;
     walker->ptppvy=tempy;
     walker->ptppvz=tempz;
-    // invertivettori(walker->ppvx, walker->ppvxtemp, nparticelle*nparticelle);
-    // invertivettori(walker->ppvy, walker->ppvytemp, nparticelle*nparticelle);
-    // invertivettori(walker->ppvz, walker->ppvztemp, nparticelle*nparticelle);
     return 0;
 }
 
