@@ -36,7 +36,7 @@ double ** medvar(int npassi, int nwalk, double tp1, string workdir, string label
     return out;
 }
 
-double * medscema(int nelem, double * vmed, double * vvar){
+double * med(int nelem, double * vmed, double * vvar){
     double * out = new double[2];
     for(int i=0;i<nelem;i++){
         out[0] += vmed[i];
@@ -44,17 +44,6 @@ double * medscema(int nelem, double * vmed, double * vvar){
     }
     out[0] /= nelem;
     out[1] /= nelem;
-    return out;
-}
-
-double * medpesata(int nelem, double * vmed, double * vvar){
-    double * out = new double[2];
-    for(int i=0;i<nelem;i++){
-        out[0] += vmed[i]/vvar[i];
-        out[1] += 1/vvar[i];
-    }
-    out[0] /= out[1];
-    out[1] = 1/out[1];
     return out;
 }
 
@@ -99,24 +88,16 @@ int main(int argc, char ** argv){
     varwalkstim2 = tempstim2[1];
 
     cout << "---ken---" << endl;
-    double * finken = medpesata(nwalk, medwalkken, varwalkken);
-    cout << finken[0] << " " << sqrt(finken[1]) << endl;
-    double * finken2 = medscema(nwalk, medwalkken, varwalkken);
+    double * finken2 = med(nwalk, medwalkken, varwalkken);
     cout << finken2[0] << " " << sqrt(finken2[1]) << endl;
     cout << "---pot---" << endl;
-    double * finpot = medpesata(nwalk, medwalkpot, varwalkpot);
-    cout << finpot[0] << " " << sqrt(finpot[1]) << endl;
-    double * finpot2 = medscema(nwalk, medwalkpot, varwalkpot);
+    double * finpot2 = med(nwalk, medwalkpot, varwalkpot);
     cout << finpot2[0] << " " << sqrt(finpot2[1]) << endl;
     cout << "---stim1---" << endl;
-    double * finstim1 = medpesata(nwalk, medwalkstim1, varwalkstim1);
-    cout << finstim1[0] << " " << sqrt(finstim1[1]) << endl;
-    double * finstim12 = medscema(nwalk, medwalkstim1, varwalkstim1);
+    double * finstim12 = med(nwalk, medwalkstim1, varwalkstim1);
     cout << finstim12[0] << " " << sqrt(finstim12[1]) << endl;
     cout << "---stim2---" << endl;
-    double * finstim2 = medpesata(nwalk, medwalkstim2, varwalkstim2);
-    cout << finstim2[0] << " " << sqrt(finstim2[1]) << endl;
-    double * finstim22 = medscema(nwalk, medwalkstim2, varwalkstim2);
+    double * finstim22 = med(nwalk, medwalkstim2, varwalkstim2);
     cout << finstim22[0] << " " << sqrt(finstim22[1]) << endl;
     
     return 0;
