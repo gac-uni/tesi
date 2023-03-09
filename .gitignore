@@ -1,11 +1,22 @@
 .vscode/
 old/
+oldppv/
 provegpd/
 provevarie/
 *_out/
+*_val/
+*_out*/
+*_val*/
+*_plots/
 *.out
 *.dat
-*.pdf
-jaru/
+*.pdf.autosave.ipe
+grafici/*.eps
+grafici/*.tex
+grafici/*.pdf
+grafici/*.png
 comandovideo.txt
+dmc_postp/*.txt
+grafici_ipe/
+processing_final/*.txt
 
